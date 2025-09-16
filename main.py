@@ -3,6 +3,7 @@ import time
 import json 
 import os
 from telebot import types
+import datetime
 
 bot = telebot.TeleBot('6137466158:AAFqIcQG4OUwyNB6W0_Ilrs2AwgDvIhO60w')
 chat_id = 877378366
@@ -11,14 +12,25 @@ to_do = 'to_do.json'
 
 def load_tasks():
     if os.path.exists(to_do):
-        with open(to_do, 'r', encoding='utf-8') as f:
-            return json.load(f)
+        try:
+            with open(to_do, 'r', encoding='utf-8') as f:
+                content = f.read().strip()
+                if not content:  # Если файл пустой
+                    return {}
+                return json.loads(content)
+        except json.JSONDecodeError:
+            print("Файл поврежден, создаем новый")
+            return {}
     return {}
 
-# Сохранение задач в файл
 def save_tasks(tasks):
-    with open(to_do, 'w', encoding='utf-8') as f:
-        json.dump(tasks, f, ensure_ascii=False, indent=2)
+    try:
+        with open(to_do, 'w', encoding='utf-8') as f:
+            json.dump(tasks, f, ensure_ascii=False, indent=2)
+        return True
+    except Exception as e:
+        print(f"Error saving tasks: {e}")
+        return False
 
 @bot.message_handler(commands=['start'])
 def start(command):
@@ -52,7 +64,9 @@ def process_add_task(message):
             bot.send_message(message.chat.id, "❌ Задача не может быть пустой!", reply_markup=menu())
     except Exception as e:
         print(f"Error adding task: {e}")
-        bot.send_message(message.chat.id, "❌ Ошибка при добавлении задачи", reply_markup=menu())
+        import traceback
+        traceback.print_exc()
+        bot.send_message(message.chat.id, f"❌ Ошибка при добавлении задачи: {str(e)}", reply_markup=menu())
 
 @bot.message_handler(func=lambda message: message.text == 'Список задач')
 def show_task(message):
@@ -64,9 +78,11 @@ def show_task(message):
         return
     
     task_list = "📋 *Ваши задачи:*\n\n"
+    now = datetime.datetime.now()
+    formatted_date = now.strftime("%Y-%m-%d")
     for task in tasks[user_id]:
         status = "✅" if task['completed'] else "⏳"
-        task_list += f"{status} {task['id']}. {task['text']}\n"
+        task_list += f"🗓️ {formatted_date}\n\n {status} {task['id']}. {task['text']}\n"
     
     bot.send_message(message.chat.id, task_list, parse_mode='Markdown', reply_markup=menu())
 
@@ -170,24 +186,6 @@ def handle_callback(call):
             call.message.chat.id,
             call.message.message_id
         )
-
-@bot.message_handler(commands=['help'])
-def send_help(message):
-    help_text = """
-📋 *To-Do List Bot - Помощь*
-
-*Команды:*
-/start - Начать работу
-/help - Показать помощь
-
-*Кнопки:*
-📝 Добавить задачу - Добавить новую задачу
-📋 Список задач - Показать все задачи
-✅ Завершить задачу - Отметить задачу выполненной
-🗑️ Удалить задачу - Удалить задачу
-🧹 Очистить все - Удалить все задачи
-"""
-    bot.send_message(message.chat.id, help_text, parse_mode='Markdown', reply_markup=menu())
 
 @bot.message_handler(commands=['stats'])
 def show_stats(message):
